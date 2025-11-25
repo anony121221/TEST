@@ -3,501 +3,584 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traffic Camera Monitor</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Weather Camera Monitor</title>
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
-        
-        #map { width: 100%; height: 100%; position: absolute; inset: 0; z-index: 0; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-        /* Custom Scrollbar for Log */
-        .log-container::-webkit-scrollbar { width: 8px; }
-        .log-container::-webkit-scrollbar-track { background: #1e293b; }
-        .log-container::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
 
-        /* Cluster & Marker Styles */
+        #app {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .api-key-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h1 {
+            font-size: 1.5rem;
+            color: #3b82f6;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #94a3b8;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.75rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .info-note {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .info-note a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .info-note a:hover {
+            text-decoration: underline;
+        }
+
+        .stats-panel {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: #1e293b;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .stats-panel .count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .stats-panel .label {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 10;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #334155;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .camera-popup {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #1e293b;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            max-width: 450px;
+            width: 90%;
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        .popup-header {
+            background: #3b82f6;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .popup-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+            font-size: 1.5rem;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .popup-content {
+            padding: 1rem;
+        }
+
+        .popup-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.75rem;
+        }
+
+        .camera-image {
+            width: 100%;
+            border-radius: 8px;
+            background: #0f172a;
+        }
+
+        .image-placeholder {
+            width: 100%;
+            height: 200px;
+            background: #0f172a;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+        }
+
+        .btn-link {
+            display: block;
+            width: 100%;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: #3b82f6;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-link:hover {
+            background: #2563eb;
+        }
+
+        .maplibregl-popup-content {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .maplibregl-popup-close-button {
+            color: #94a3b8;
+            font-size: 1.5rem;
+        }
+
         .cluster-marker {
             background: #3b82f6;
             border: 3px solid #1e293b;
             border-radius: 50%;
             color: white;
             font-weight: 700;
+            text-align: center;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.2s, background-color 0.2s;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
         }
-        .cluster-marker:hover { transform: scale(1.1); background-color: #2563eb; }
+
+        .cluster-marker:hover {
+            transform: scale(1.1);
+        }
 
         .camera-marker {
-            width: 28px;
-            height: 28px;
-            background: #10b981;
-            border: 2px solid #ffffff;
+            width: 32px;
+            height: 32px;
+            background: #3b82f6;
+            border: 3px solid #1e293b;
             border-radius: 50%;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 16px;
             transition: transform 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
-        .camera-marker:hover { transform: scale(1.25); z-index: 10; }
-        
-        /* Popup Styling Override */
-        .maplibregl-popup-content {
-            background: #1e293b;
-            color: #e2e8f0;
-            border-radius: 0.75rem;
-            padding: 0;
-            border: 1px solid #334155;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-            max-width: 320px !important;
+
+        .camera-marker:hover {
+            transform: scale(1.2);
         }
-        .maplibregl-popup-close-button {
-            color: #94a3b8;
-            font-size: 1.5rem;
-            padding: 0.25rem 0.5rem;
+
+        .error-banner {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #dc2626;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             z-index: 10;
         }
-        .maplibregl-popup-tip { border-top-color: #1e293b; }
     </style>
 </head>
-<body class="h-screen w-screen overflow-hidden flex flex-col relative">
-
-    <!-- UI Overlay: Header & Controls -->
-    <div class="absolute top-0 left-0 right-0 z-10 p-4 pointer-events-none">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            
-            <!-- Title Card -->
-            <div class="bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 p-3 rounded-xl shadow-xl pointer-events-auto flex items-center gap-3">
-                <div class="bg-blue-600 p-2 rounded-lg text-white">
-                    <i data-lucide="video" class="w-5 h-5"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-white leading-tight">TrafficCam <span class="text-blue-400">Map</span></h1>
-                    <div class="flex items-center gap-2 text-xs text-slate-400">
-                        <span id="status-dot" class="flex h-2 w-2 rounded-full bg-slate-500"></span>
-                        <span id="status-text">Initializing...</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Controls -->
-            <div class="bg-slate-900/90 backdrop-blur-sm border border-slate-700/50 p-2 rounded-xl shadow-xl pointer-events-auto flex items-center gap-2">
-                
-                <!-- Proxy Toggle -->
-                <div class="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700">
-                    <button onclick="app.toggleProxy(false)" id="proxy-off" class="px-3 py-1.5 text-xs rounded-md transition-colors bg-slate-600 text-white font-medium">Direct</button>
-                    <button onclick="app.toggleProxy(true)" id="proxy-on" class="px-3 py-1.5 text-xs rounded-md transition-colors text-slate-400 hover:text-white">Proxy</button>
-                </div>
-
-                <div class="h-6 w-px bg-slate-700 mx-1"></div>
-
-                <!-- Stats -->
-                <div class="px-3 flex flex-col items-end">
-                    <span class="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Cameras</span>
-                    <span class="text-lg font-bold text-white leading-none" id="camera-count">0</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Map Container -->
-    <div id="map"></div>
-
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" class="absolute inset-0 z-20 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center flex-col gap-4 transition-opacity duration-500">
-        <div class="relative w-16 h-16">
-            <div class="absolute inset-0 border-4 border-slate-700 rounded-full"></div>
-            <div class="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
-        </div>
-        <div class="text-white font-medium animate-pulse">Loading Map Data...</div>
-    </div>
-
-    <!-- API Key Modal -->
-    <div id="api-modal" class="absolute inset-0 z-50 bg-slate-950/90 flex items-center justify-center hidden">
-        <div class="bg-slate-900 border border-slate-700 p-6 rounded-2xl shadow-2xl max-w-md w-full mx-4">
-            <div class="flex items-center gap-3 mb-6">
-                <i data-lucide="key" class="w-8 h-8 text-blue-500"></i>
-                <h2 class="text-xl font-bold text-white">API Key Required</h2>
-            </div>
-            <p class="text-slate-400 text-sm mb-4">This map uses MapTiler. Please enter your free API key to continue.</p>
-            <input type="text" id="api-input" placeholder="Enter MapTiler Key" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white mb-4 focus:ring-2 focus:ring-blue-500 outline-none">
-            <button onclick="app.saveKey()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Launch Map</button>
-            <p class="mt-4 text-xs text-center text-slate-500">Don't have one? <a href="https://www.maptiler.com" target="_blank" class="text-blue-400 hover:underline">Get it free here</a></p>
-        </div>
-    </div>
-
-    <!-- Logging Panel -->
-    <div id="log-panel" class="absolute bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-700 shadow-2xl transition-transform duration-300 transform translate-y-0 h-48 z-30 flex flex-col">
-        <div class="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700 cursor-pointer hover:bg-slate-800 transition-colors" onclick="logger.toggle()">
-            <div class="flex items-center gap-2">
-                <i data-lucide="terminal" class="w-4 h-4 text-blue-400"></i>
-                <span class="text-xs font-mono font-semibold text-slate-200 uppercase tracking-wider">System Log</span>
-                <span id="log-count" class="bg-blue-500 text-white text-[10px] px-1.5 rounded-full">0</span>
-            </div>
-            <div class="flex items-center gap-3">
-                <button onclick="event.stopPropagation(); logger.clear()" class="text-[10px] text-slate-400 hover:text-white uppercase font-bold tracking-wider hover:underline">Clear</button>
-                <i id="log-chevron" data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"></i>
-            </div>
-        </div>
-        <div class="flex-1 overflow-y-auto p-3 font-mono text-xs log-container space-y-1.5" id="log-content">
-            <!-- Logs injected here -->
-        </div>
-    </div>
+<body>
+    <div id="app"></div>
 
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
-
     <script>
-        // --- Logger Utility ---
-        const logger = {
-            isOpen: true,
-            count: 0,
-            
-            log(msg, type = 'info') {
-                const colors = {
-                    info: 'text-slate-300',
-                    success: 'text-emerald-400',
-                    error: 'text-rose-400',
-                    warning: 'text-amber-400'
-                };
-                
-                const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-                const el = document.createElement('div');
-                el.className = `flex gap-2 ${colors[type] || colors.info}`;
-                el.innerHTML = `<span class="opacity-50 select-none">[${time}]</span> <span>${msg}</span>`;
-                
-                const container = document.getElementById('log-content');
-                container.appendChild(el);
-                container.scrollTop = container.scrollHeight;
-                
-                this.count++;
-                document.getElementById('log-count').textContent = this.count;
-            },
-            
-            error(msg) { this.log(msg, 'error'); },
-            success(msg) { this.log(msg, 'success'); },
-            
-            toggle() {
-                const panel = document.getElementById('log-panel');
-                const chevron = document.getElementById('log-chevron');
-                this.isOpen = !this.isOpen;
-                
-                if (this.isOpen) {
-                    panel.style.transform = 'translateY(0)';
-                    chevron.style.transform = 'rotate(0deg)';
-                } else {
-                    panel.style.transform = 'translateY(calc(100% - 36px))';
-                    chevron.style.transform = 'rotate(180deg)';
-                }
-            },
-            
-            clear() {
-                document.getElementById('log-content').innerHTML = '';
-                this.count = 0;
-                document.getElementById('log-count').textContent = '0';
-                this.log('Log cleared', 'info');
+        let map;
+        let cameras = [];
+        let selectedCamera = null;
+        let clusterIndex;
+        let markers = [];
+
+        function renderApp() {
+            var app = document.getElementById('app');
+            var mapTilerKey = localStorage.getItem('mapTilerKey');
+
+            if (!mapTilerKey) {
+                app.innerHTML = '<div class="api-key-modal"><div class="modal-content"><div class="modal-header"><span style="font-size: 2rem;">&#128247;</span><h1>Weather Camera Monitor</h1></div><div class="input-group"><label>MapTiler API Key</label><input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key"></div><button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button><div class="info-note">Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a></div></div></div>';
+            } else {
+                app.innerHTML = '<div id="map"></div><div class="stats-panel"><div class="count" id="cameraCount">0</div><div class="label">Cameras Loaded</div></div><div id="loadingIndicator" class="loading-indicator" style="display: none;"><div class="spinner"></div><span>Loading cameras...</span></div><div id="errorBanner" class="error-banner" style="display: none;"></div><div id="cameraPopup" class="camera-popup" style="display: none;"></div>';
+                initMap(mapTilerKey);
             }
-        };
+        }
 
-        // --- Application Logic ---
-        const app = {
-            map: null,
-            cameras: [],
-            clusterIndex: null,
-            markers: [],
-            useProxy: false,
-            
-            init() {
-                lucide.createIcons();
-                const key = localStorage.getItem('mapTilerKey');
-                
-                if (!key) {
-                    document.getElementById('api-modal').classList.remove('hidden');
-                    document.getElementById('loading-overlay').classList.add('hidden');
-                } else {
-                    this.initMap(key);
-                }
-                
-                logger.log('Application initialized');
-            },
-            
-            saveKey() {
-                const input = document.getElementById('api-input');
-                const key = input.value.trim();
-                if (key) {
-                    localStorage.setItem('mapTilerKey', key);
-                    document.getElementById('api-modal').classList.add('hidden');
-                    document.getElementById('loading-overlay').classList.remove('hidden');
-                    this.initMap(key);
-                } else {
-                    alert('Please enter a valid API key');
-                }
-            },
-            
-            initMap(apiKey) {
-                logger.log('Initializing MapLibre...');
+        function saveApiKey() {
+            var input = document.getElementById('apiKeyInput');
+            var key = input.value.trim();
+            if (key) {
+                localStorage.setItem('mapTilerKey', key);
+                renderApp();
+            }
+        }
+
+        function initMap(apiKey) {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=' + apiKey,
+                center: [-95, 37],
+                zoom: 4
+            });
+
+            map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+            map.on('load', function() {
+                loadCameras();
+            });
+
+            map.on('zoom', function() {
+                updateMarkers();
+            });
+
+            map.on('move', function() {
+                updateMarkers();
+            });
+        }
+
+        async function loadCameras() {
+            var loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = 'flex';
+
+            try {
+                var allCameras = [];
+
                 try {
-                    this.map = new maplibregl.Map({
-                        container: 'map',
-                        style: `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${apiKey}`,
-                        center: [-96, 37.8], // USA center
-                        zoom: 4
-                    });
-
-                    this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-
-                    this.map.on('load', () => {
-                        logger.success('Map style loaded');
-                        document.getElementById('status-dot').classList.replace('bg-slate-500', 'bg-emerald-500');
-                        document.getElementById('status-dot').classList.add('animate-pulse');
-                        document.getElementById('status-text').textContent = 'Live';
-                        this.loadData();
-                    });
-
-                    this.map.on('error', (e) => {
-                        logger.error(`Map error: ${e.error.message}`);
-                    });
-
-                    // Cluster handling
-                    this.map.on('moveend', () => this.updateMarkers());
+                    var usaResponse = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
+                    var usaData = await usaResponse.json();
                     
-                } catch (e) {
-                    logger.error(`Map init failed: ${e.message}`);
-                    alert('Failed to initialize map. Check console/logs.');
-                }
-            },
-
-            toggleProxy(enable) {
-                this.useProxy = enable;
-                document.getElementById('proxy-off').className = enable 
-                    ? "px-3 py-1.5 text-xs rounded-md transition-colors text-slate-400 hover:text-white" 
-                    : "px-3 py-1.5 text-xs rounded-md transition-colors bg-slate-600 text-white font-medium";
-                document.getElementById('proxy-on').className = enable 
-                    ? "px-3 py-1.5 text-xs rounded-md transition-colors bg-blue-600 text-white font-medium" 
-                    : "px-3 py-1.5 text-xs rounded-md transition-colors text-slate-400 hover:text-white";
-                
-                logger.log(`Proxy mode: ${enable ? 'ENABLED' : 'DISABLED'}`);
-                
-                // If a popup is open, refresh it
-                const popupContent = document.querySelector('.maplibregl-popup-content img');
-                if (popupContent) {
-                    logger.log('Refetching active camera image...');
-                    const currentSrc = popupContent.getAttribute('data-original-src');
-                    if (currentSrc) popupContent.src = this.getProxiedUrl(currentSrc);
-                }
-            },
-
-            getProxiedUrl(url) {
-                if (!url) return '';
-                if (!this.useProxy) return url;
-                // Using a common CORS proxy for demo purposes
-                return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-            },
-
-            async loadData() {
-                logger.log('Starting data fetch...');
-                const allCameras = [];
-
-                // 1. Load USA Data (Fixing the URL)
-                try {
-                    // Corrected URL: Removed 'refs/heads/' which breaks raw.githubusercontent
-                    const usaUrl = 'https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/master/cameras/USA.json';
-                    logger.log(`Fetching USA data from ${usaUrl}...`);
-                    
-                    const res = await fetch(usaUrl);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const data = await res.json();
-                    
-                    if (data && data.features) {
-                        data.features.forEach(f => {
-                            if (f.geometry?.coordinates) {
+                    if (usaData && usaData.features) {
+                        usaData.features.forEach(function(feature) {
+                            if (feature.geometry && feature.geometry.coordinates) {
+                                var props = feature.properties || {};
                                 allCameras.push({
-                                    id: `usa-${f.properties.id || Math.random()}`,
-                                    lat: f.geometry.coordinates[1],
-                                    lng: f.geometry.coordinates[0],
-                                    title: f.properties.description || f.properties.name || 'Traffic Camera',
-                                    source: 'USA (OpenTrafficCam)',
-                                    imageUrl: f.properties.image_url || f.properties.url,
-                                    webUrl: f.properties.web_page_url
+                                    id: 'usa-' + (props.id || Math.random()),
+                                    lat: feature.geometry.coordinates[1],
+                                    lng: feature.geometry.coordinates[0],
+                                    title: props.title || props.name || 'Traffic Camera',
+                                    source: 'USA',
+                                    imageUrl: props.image_url || props.url,
+                                    webUrl: props.web_page_url
                                 });
                             }
                         });
-                        logger.success(`Loaded ${data.features.length} USA cameras`);
                     }
-                } catch (e) {
-                    logger.error(`USA Data Failed: ${e.message}`);
+                } catch (err) {
+                    console.error('USA cameras error:', err);
                 }
 
-                // 2. Load MS Data
                 try {
-                    // Corrected URL format just in case
-                    const msUrl = 'https://raw.githubusercontent.com/anony121221/maps-data/main/mdot_traffic_cameras.geojson';
-                    logger.log(`Fetching MS data from ${msUrl}...`);
+                    var msResponse = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
+                    var msData = await msResponse.json();
                     
-                    const res = await fetch(msUrl);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const data = await res.json();
-                    
-                    if (data && data.features) {
-                        data.features.forEach(f => {
-                            if (f.geometry?.coordinates) {
+                    if (msData && msData.features) {
+                        msData.features.forEach(function(feature) {
+                            if (feature.geometry && feature.geometry.coordinates) {
+                                var props = feature.properties || {};
                                 allCameras.push({
-                                    id: `ms-${f.properties.id || Math.random()}`,
-                                    lat: f.geometry.coordinates[1],
-                                    lng: f.geometry.coordinates[0],
-                                    title: f.properties.title || 'MS Camera',
-                                    source: 'Mississippi DOT',
-                                    imageUrl: f.properties.image_url,
-                                    webUrl: f.properties.web_page_url
+                                    id: 'ms-' + (props.id || Math.random()),
+                                    lat: feature.geometry.coordinates[1],
+                                    lng: feature.geometry.coordinates[0],
+                                    title: props.title || 'MS Camera',
+                                    source: 'Mississippi',
+                                    webUrl: props.web_page_url,
+                                    imageUrl: props.image_url
                                 });
                             }
                         });
-                        logger.success(`Loaded ${data.features.length} MS cameras`);
                     }
-                } catch (e) {
-                    logger.error(`MS Data Failed: ${e.message}`);
+                } catch (err) {
+                    console.error('Mississippi cameras error:', err);
                 }
 
-                this.cameras = allCameras;
-                document.getElementById('camera-count').textContent = this.cameras.length;
-                
-                if (this.cameras.length === 0) {
-                    logger.error('No cameras loaded from any source.');
-                    document.getElementById('loading-overlay').classList.add('hidden');
-                    return;
-                }
+                cameras = allCameras;
+                document.getElementById('cameraCount').textContent = cameras.length;
 
-                // Init Supercluster
-                this.clusterIndex = new Supercluster({
-                    radius: 60,
-                    maxZoom: 14
+                clusterIndex = new Supercluster({
+                    radius: 80,
+                    maxZoom: 16,
+                    minZoom: 0
                 });
 
-                this.clusterIndex.load(this.cameras.map(c => ({
-                    type: 'Feature',
-                    properties: { camera: c },
-                    geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
-                })));
+                var points = cameras.map(function(cam) {
+                    return {
+                        type: 'Feature',
+                        properties: { camera: cam },
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [cam.lng, cam.lat]
+                        }
+                    };
+                });
 
-                logger.log('Cluster index built. Rendering markers...');
-                this.updateMarkers();
-                document.getElementById('loading-overlay').classList.add('hidden');
-            },
+                clusterIndex.load(points);
+                updateMarkers();
 
-            updateMarkers() {
-                if (!this.map || !this.clusterIndex) return;
+                loadingIndicator.style.display = 'none';
+            } catch (err) {
+                console.error('Error loading cameras:', err);
+                showError('Error loading camera data');
+                loadingIndicator.style.display = 'none';
+            }
+        }
 
-                // Clear existing
-                this.markers.forEach(m => m.remove());
-                this.markers = [];
+        function updateMarkers() {
+            if (!map || !clusterIndex) return;
 
-                const bounds = this.map.getBounds();
-                const zoom = Math.floor(this.map.getZoom());
-                
-                // Get clusters for current view
-                const clusters = this.clusterIndex.getClusters(
-                    [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
-                    zoom
-                );
+            markers.forEach(function(marker) {
+                marker.remove();
+            });
+            markers = [];
 
-                for (const cluster of clusters) {
-                    const [lng, lat] = cluster.geometry.coordinates;
-                    const isCluster = cluster.properties.cluster;
+            var bounds = map.getBounds();
+            var zoom = map.getZoom();
 
-                    const el = document.createElement('div');
+            var clusters = clusterIndex.getClusters(
+                [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+                Math.floor(zoom)
+            );
+
+            clusters.forEach(function(cluster) {
+                var lng = cluster.geometry.coordinates[0];
+                var lat = cluster.geometry.coordinates[1];
+                var isCluster = cluster.properties.cluster;
+
+                if (isCluster) {
+                    var count = cluster.properties.point_count;
+                    var size = count < 100 ? 40 : count < 1000 ? 50 : 60;
                     
-                    if (isCluster) {
-                        const count = cluster.properties.point_count;
-                        const size = count < 100 ? 30 : count < 1000 ? 40 : 50;
-                        
-                        el.className = 'cluster-marker';
-                        el.style.width = `${size}px`;
-                        el.style.height = `${size}px`;
-                        el.textContent = count;
-                        
-                        el.onclick = () => {
-                            const expansionZoom = Math.min(
-                                this.clusterIndex.getClusterExpansionZoom(cluster.id),
+                    var el = document.createElement('div');
+                    el.className = 'cluster-marker';
+                    el.style.width = size + 'px';
+                    el.style.height = size + 'px';
+                    el.textContent = count;
+
+                    el.addEventListener('click', (function(clusterId, lng, lat) {
+                        return function() {
+                            var expansionZoom = Math.min(
+                                clusterIndex.getClusterExpansionZoom(clusterId),
                                 20
                             );
-                            this.map.easeTo({ center: [lng, lat], zoom: expansionZoom });
+                            map.easeTo({
+                                center: [lng, lat],
+                                zoom: expansionZoom
+                            });
                         };
-                    } else {
-                        el.className = 'camera-marker';
-                        el.innerHTML = '<i data-lucide="camera" style="width:14px; height:14px; color:white;"></i>';
-                        
-                        el.onclick = () => this.showPopup(cluster.properties.camera);
-                    }
+                    })(cluster.id, lng, lat));
 
-                    // Create and track marker
-                    const marker = new maplibregl.Marker({ element: el })
+                    var marker = new maplibregl.Marker({ element: el })
                         .setLngLat([lng, lat])
-                        .addTo(this.map);
-                        
-                    this.markers.push(marker);
-                }
-                lucide.createIcons();
-            },
+                        .addTo(map);
 
-            showPopup(camera) {
-                const url = this.getProxiedUrl(camera.imageUrl);
-                
-                const html = `
-                    <div class="flex flex-col overflow-hidden rounded-xl bg-slate-900 border border-slate-700">
-                        <div class="bg-slate-800 p-3 flex justify-between items-start border-b border-slate-700">
-                            <div>
-                                <h3 class="font-bold text-white text-sm">${camera.title}</h3>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${camera.source}</p>
-                            </div>
-                        </div>
-                        <div class="relative bg-black min-h-[150px] flex items-center justify-center group">
-                            ${url ? 
-                                `<img src="${url}" 
-                                      data-original-src="${camera.imageUrl}"
-                                      class="w-full h-auto max-h-[240px] object-contain" 
-                                      alt="Camera Feed"
-                                      onload="logger.success('Image loaded for ${camera.id}')"
-                                      onerror="this.style.display='none'; document.getElementById('err-${camera.id}').style.display='flex'; logger.error('Image failed for ${camera.id}')">
-                                 <div id="err-${camera.id}" class="hidden absolute inset-0 flex-col items-center justify-center text-slate-500 gap-2 p-4 text-center">
-                                     <i data-lucide="image-off" class="w-8 h-8 opacity-50"></i>
-                                     <span class="text-xs">Signal Lost</span>
-                                     <button onclick="app.toggleProxy(true)" class="text-[10px] text-blue-400 hover:underline">Try Proxy</button>
-                                 </div>` 
-                                : 
-                                `<div class="flex flex-col items-center justify-center text-slate-500 gap-2 p-8">
-                                    <i data-lucide="video-off" class="w-8 h-8 opacity-50"></i>
-                                    <span class="text-xs">No Video Feed</span>
-                                 </div>`
-                            }
-                        </div>
-                        ${camera.webUrl ? 
-                            `<a href="${camera.webUrl}" target="_blank" class="block w-full text-center py-2 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-blue-400 transition-colors">
-                                Open Source Page &rarr;
-                            </a>` 
-                        : ''}
-                    </div>
-                `;
-
-                new maplibregl.Popup({ closeButton: false, maxWidth: '320px', offset: 15 })
-                    .setLngLat([camera.lng, camera.lat])
-                    .setHTML(html)
-                    .addTo(this.map);
+                    markers.push(marker);
+                } else {
+                    var camera = cluster.properties.camera;
                     
-                lucide.createIcons();
-            }
-        };
+                    var el = document.createElement('div');
+                    el.className = 'camera-marker';
+                    el.innerHTML = '&#128247;';
 
-        // Start
-        app.init();
+                    el.addEventListener('click', (function(cam) {
+                        return function() {
+                            showCameraPopup(cam);
+                        };
+                    })(camera));
+
+                    var marker = new maplibregl.Marker({ element: el })
+                        .setLngLat([lng, lat])
+                        .addTo(map);
+
+                    markers.push(marker);
+                }
+            });
+        }
+
+        function showCameraPopup(camera) {
+            selectedCamera = camera;
+            var popup = document.getElementById('cameraPopup');
+            
+            var html = '<div class="popup-header"><h3>&#128247; ' + camera.title + '</h3><button class="close-btn" onclick="closeCameraPopup()">×</button></div>';
+            html += '<div class="popup-content">';
+            html += '<div class="popup-meta">Source: ' + camera.source + ' | Lat: ' + camera.lat.toFixed(4) + ', Lng: ' + camera.lng.toFixed(4) + '</div>';
+            
+            if (camera.imageUrl) {
+                html += '<img src="' + camera.imageUrl + '" alt="' + camera.title + '" class="camera-image" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">';
+                html += '<div class="image-placeholder" style="display:none;">Image unavailable</div>';
+            } else {
+                html += '<div class="image-placeholder">No image available</div>';
+            }
+            
+            if (camera.webUrl) {
+                html += '<a href="' + camera.webUrl + '" target="_blank" class="btn-link">View Full Page</a>';
+            }
+            
+            html += '</div>';
+            
+            popup.innerHTML = html;
+            popup.style.display = 'block';
+        }
+
+        function closeCameraPopup() {
+            document.getElementById('cameraPopup').style.display = 'none';
+        }
+
+        function showError(message) {
+            var banner = document.getElementById('errorBanner');
+            banner.textContent = message;
+            banner.style.display = 'block';
+            setTimeout(function() {
+                banner.style.display = 'none';
+            }, 5000);
+        }
+
+        renderApp();
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('apiKeyInput')) {
+                saveApiKey();
+            }
+        });
     </script>
 </body>
 </html>
