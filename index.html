@@ -329,8 +329,6 @@
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
     <script>
-        const DRIVE_TEXAS_API_KEY = '829ca858-ef46-430a-a010-e2e60857ef4e';
-        
         let map;
         let cameras = [];
         let selectedCamera = null;
@@ -338,11 +336,11 @@
         let markers = [];
 
         function renderApp() {
-            const app = document.getElementById('app');
-            const mapTilerKey = localStorage.getItem('mapTilerKey');
+            var app = document.getElementById('app');
+            var mapTilerKey = localStorage.getItem('mapTilerKey');
 
             if (!mapTilerKey) {
-                app.innerHTML = '<div class="api-key-modal"><div class="modal-content"><div class="modal-header"><span style="font-size: 2rem;">📷</span><h1>Weather Camera Monitor</h1></div><div class="input-group"><label>MapTiler API Key</label><input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key"></div><button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button><div class="info-note">Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a></div></div></div>';
+                app.innerHTML = '<div class="api-key-modal"><div class="modal-content"><div class="modal-header"><span style="font-size: 2rem;">&#128247;</span><h1>Weather Camera Monitor</h1></div><div class="input-group"><label>MapTiler API Key</label><input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key"></div><button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button><div class="info-note">Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a></div></div></div>';
             } else {
                 app.innerHTML = '<div id="map"></div><div class="stats-panel"><div class="count" id="cameraCount">0</div><div class="label">Cameras Loaded</div></div><div id="loadingIndicator" class="loading-indicator" style="display: none;"><div class="spinner"></div><span>Loading cameras...</span></div><div id="errorBanner" class="error-banner" style="display: none;"></div><div id="cameraPopup" class="camera-popup" style="display: none;"></div>';
                 initMap(mapTilerKey);
@@ -350,8 +348,8 @@
         }
 
         function saveApiKey() {
-            const input = document.getElementById('apiKeyInput');
-            const key = input.value.trim();
+            var input = document.getElementById('apiKeyInput');
+            var key = input.value.trim();
             if (key) {
                 localStorage.setItem('mapTilerKey', key);
                 renderApp();
@@ -382,63 +380,44 @@
         }
 
         async function loadCameras() {
-            const loadingIndicator = document.getElementById('loadingIndicator');
+            var loadingIndicator = document.getElementById('loadingIndicator');
             loadingIndicator.style.display = 'flex';
 
             try {
-                const allCameras = [];
-
-                const usaResponse = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
-                const usaData = await usaResponse.json();
-                
-                if (usaData.features) {
-                    usaData.features.forEach(function(feature) {
-                        if (feature.geometry && feature.geometry.coordinates) {
-                            const props = feature.properties || {};
-                            allCameras.push({
-                                id: 'usa-' + (props.id || Math.random()),
-                                lat: feature.geometry.coordinates[1],
-                                lng: feature.geometry.coordinates[0],
-                                title: props.title || props.name || 'Traffic Camera',
-                                source: 'USA',
-                                imageUrl: props.image_url || props.url,
-                                webUrl: props.web_page_url
-                            });
-                        }
-                    });
-                }
+                var allCameras = [];
 
                 try {
-                    const txResponse = await fetch('https://its.txdot.gov/ITS_WEB/FrontEnd/api/cameras?key=' + DRIVE_TEXAS_API_KEY);
-                    const txData = await txResponse.json();
+                    var usaResponse = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
+                    var usaData = await usaResponse.json();
                     
-                    if (txData && Array.isArray(txData)) {
-                        txData.forEach(function(cam) {
-                            if (cam.Latitude && cam.Longitude) {
+                    if (usaData && usaData.features) {
+                        usaData.features.forEach(function(feature) {
+                            if (feature.geometry && feature.geometry.coordinates) {
+                                var props = feature.properties || {};
                                 allCameras.push({
-                                    id: 'tx-' + (cam.CameraGuid || cam.Id),
-                                    lat: parseFloat(cam.Latitude),
-                                    lng: parseFloat(cam.Longitude),
-                                    title: cam.CameraName || cam.Name || 'TX Camera',
-                                    source: 'Texas',
-                                    imageUrl: cam.ImageUrl || cam.Url,
-                                    webUrl: cam.Url
+                                    id: 'usa-' + (props.id || Math.random()),
+                                    lat: feature.geometry.coordinates[1],
+                                    lng: feature.geometry.coordinates[0],
+                                    title: props.title || props.name || 'Traffic Camera',
+                                    source: 'USA',
+                                    imageUrl: props.image_url || props.url,
+                                    webUrl: props.web_page_url
                                 });
                             }
                         });
                     }
                 } catch (err) {
-                    console.error('Texas cameras error:', err);
+                    console.error('USA cameras error:', err);
                 }
 
                 try {
-                    const msResponse = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
-                    const msData = await msResponse.json();
+                    var msResponse = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
+                    var msData = await msResponse.json();
                     
-                    if (msData.features) {
+                    if (msData && msData.features) {
                         msData.features.forEach(function(feature) {
                             if (feature.geometry && feature.geometry.coordinates) {
-                                const props = feature.properties || {};
+                                var props = feature.properties || {};
                                 allCameras.push({
                                     id: 'ms-' + (props.id || Math.random()),
                                     lat: feature.geometry.coordinates[1],
@@ -464,7 +443,7 @@
                     minZoom: 0
                 });
 
-                const points = cameras.map(function(cam) {
+                var points = cameras.map(function(cam) {
                     return {
                         type: 'Feature',
                         properties: { camera: cam },
@@ -494,57 +473,61 @@
             });
             markers = [];
 
-            const bounds = map.getBounds();
-            const zoom = map.getZoom();
+            var bounds = map.getBounds();
+            var zoom = map.getZoom();
 
-            const clusters = clusterIndex.getClusters(
+            var clusters = clusterIndex.getClusters(
                 [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
                 Math.floor(zoom)
             );
 
             clusters.forEach(function(cluster) {
-                const lng = cluster.geometry.coordinates[0];
-                const lat = cluster.geometry.coordinates[1];
-                const isCluster = cluster.properties.cluster;
+                var lng = cluster.geometry.coordinates[0];
+                var lat = cluster.geometry.coordinates[1];
+                var isCluster = cluster.properties.cluster;
 
                 if (isCluster) {
-                    const count = cluster.properties.point_count;
-                    const size = count < 100 ? 40 : count < 1000 ? 50 : 60;
+                    var count = cluster.properties.point_count;
+                    var size = count < 100 ? 40 : count < 1000 ? 50 : 60;
                     
-                    const el = document.createElement('div');
+                    var el = document.createElement('div');
                     el.className = 'cluster-marker';
                     el.style.width = size + 'px';
                     el.style.height = size + 'px';
                     el.textContent = count;
 
-                    el.addEventListener('click', function() {
-                        const expansionZoom = Math.min(
-                            clusterIndex.getClusterExpansionZoom(cluster.id),
-                            20
-                        );
-                        map.easeTo({
-                            center: [lng, lat],
-                            zoom: expansionZoom
-                        });
-                    });
+                    el.addEventListener('click', (function(clusterId, lng, lat) {
+                        return function() {
+                            var expansionZoom = Math.min(
+                                clusterIndex.getClusterExpansionZoom(clusterId),
+                                20
+                            );
+                            map.easeTo({
+                                center: [lng, lat],
+                                zoom: expansionZoom
+                            });
+                        };
+                    })(cluster.id, lng, lat));
 
-                    const marker = new maplibregl.Marker({ element: el })
+                    var marker = new maplibregl.Marker({ element: el })
                         .setLngLat([lng, lat])
                         .addTo(map);
 
                     markers.push(marker);
                 } else {
-                    const camera = cluster.properties.camera;
+                    var camera = cluster.properties.camera;
                     
-                    const el = document.createElement('div');
+                    var el = document.createElement('div');
                     el.className = 'camera-marker';
                     el.innerHTML = '&#128247;';
 
-                    el.addEventListener('click', function() {
-                        showCameraPopup(camera);
-                    });
+                    el.addEventListener('click', (function(cam) {
+                        return function() {
+                            showCameraPopup(cam);
+                        };
+                    })(camera));
 
-                    const marker = new maplibregl.Marker({ element: el })
+                    var marker = new maplibregl.Marker({ element: el })
                         .setLngLat([lng, lat])
                         .addTo(map);
 
@@ -555,9 +538,9 @@
 
         function showCameraPopup(camera) {
             selectedCamera = camera;
-            const popup = document.getElementById('cameraPopup');
+            var popup = document.getElementById('cameraPopup');
             
-            let html = '<div class="popup-header"><h3>&#128247; ' + camera.title + '</h3><button class="close-btn" onclick="closeCameraPopup()">×</button></div>';
+            var html = '<div class="popup-header"><h3>&#128247; ' + camera.title + '</h3><button class="close-btn" onclick="closeCameraPopup()">×</button></div>';
             html += '<div class="popup-content">';
             html += '<div class="popup-meta">Source: ' + camera.source + ' | Lat: ' + camera.lat.toFixed(4) + ', Lng: ' + camera.lng.toFixed(4) + '</div>';
             
@@ -583,7 +566,7 @@
         }
 
         function showError(message) {
-            const banner = document.getElementById('errorBanner');
+            var banner = document.getElementById('errorBanner');
             banner.textContent = message;
             banner.style.display = 'block';
             setTimeout(function() {
