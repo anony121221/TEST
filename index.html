@@ -357,6 +357,7 @@
                 loadMississippiCameras(allCameras),
                 loadLouisianaCameras(allCameras),
                 loadTexasCameras(allCameras),
+                loadOklahomaCameras(allCameras),
             ]);
 
             return allCameras;
@@ -373,7 +374,7 @@
                             Object.entries(cities).forEach(([city, cams]) => {
                                 if (Array.isArray(cams)) {
                                     cams.forEach((cam, index) => {
-                                        if (cam.latitude && cam.longitude) {
+                                        if (cam.latitude && cam.longitude && cam.format !== 'MPEG_DASH') {
                                             allCameras.push({
                                                 id: `alabama-${county}-${city}-${index}`,
                                                 lat: cam.latitude,
@@ -407,6 +408,7 @@
                     data.features.forEach((feature) => {
                         if (feature.geometry && feature.geometry.coordinates) {
                             const props = feature.properties || {};
+                            const imageUrl = props.image_url ? CORS_PROXY + encodeURIComponent(props.image_url) : undefined;
                             allCameras.push({
                                 id: `ms-${props.id || Math.random()}`,
                                 lat: feature.geometry.coordinates[1],
@@ -414,7 +416,7 @@
                                 title: props.title || 'Mississippi Camera',
                                 source: 'Mississippi',
                                 webUrl: props.web_page_url,
-                                imageUrl: props.image_url,
+                                imageUrl: imageUrl,
                             });
                         }
                     });
@@ -452,26 +454,60 @@
 
         async function loadTexasCameras(allCameras) {
             try {
-                const response = await fetch(`https://its.txdot.gov/ITS_WEB/FrontEnd/api/cctv?key=${DRIVETEXAS_API_KEY}`);
+                const response = await fetch(`https://its.txdot.gov/ITS_WEB/FrontEnd/api/conditions.geojson?key=${DRIVETEXAS_API_KEY}`);
                 const data = await response.json();
 
-                if (data && Array.isArray(data)) {
-                    data.forEach((cam) => {
-                        if (cam.latitude && cam.longitude && cam.imageUrl) {
-                            allCameras.push({
-                                id: `tx-${cam.camId}`,
-                                lat: cam.latitude,
-                                lng: cam.longitude,
-                                title: cam.cameraName || cam.location || 'Texas Camera',
-                                source: 'DriveTexas',
-                                imageUrl: cam.imageUrl,
-                                webUrl: cam.imageUrl,
-                            });
+                if (data && data.features && Array.isArray(data.features)) {
+                    data.features.forEach((feature) => {
+                        if (feature.geometry && feature.geometry.coordinates && feature.properties) {
+                            const props = feature.properties;
+                            if (props.type === 'Camera' && props.image_url) {
+                                allCameras.push({
+                                    id: `tx-${props.id}`,
+                                    lat: feature.geometry.coordinates[1],
+                                    lng: feature.geometry.coordinates[0],
+                                    title: props.name || 'Texas Camera',
+                                    source: 'DriveTexas',
+                                    imageUrl: props.image_url,
+                                    webUrl: props.web_url || props.image_url,
+                                });
+                            }
                         }
                     });
                 }
             } catch (err) {
                 console.error('Texas cameras error:', err);
+            }
+        }
+
+        async function loadOklahomaCameras(allCameras) {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/holy.txt');
+                const data = await response.json();
+
+                if (data && Array.isArray(data)) {
+                    data.forEach((pole) => {
+                        if (pole.mapCameras && Array.isArray(pole.mapCameras)) {
+                            pole.mapCameras.forEach((cam) => {
+                                if (cam.latitude && cam.longitude) {
+                                    const streamUrl = cam.streamDictionary?.find(s => s.streamSource)?.streamSource;
+                                    allCameras.push({
+                                        id: `ok-${cam.cameraId}`,
+                                        lat: cam.latitude,
+                                        lng: cam.longitude,
+                                        title: `${pole.name} - ${cam.location || cam.direction}`,
+                                        source: 'Oklahoma',
+                                        direction: cam.direction,
+                                        imageUrl: streamUrl,
+                                        webUrl: streamUrl,
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Oklahoma cameras error:', err);
             }
         }
 
@@ -537,8 +573,8 @@
             map = new maplibregl.Map({
                 container: 'map',
                 style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=' + apiKey,
-                center: [-95, 31],
-                zoom: 6
+                center: [-92, 33],
+                zoom: 5.5
             });
 
             map.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -557,7 +593,7 @@
                 document.getElementById('cameraCount').textContent = cameras.length;
 
                 clusterIndex = new Supercluster({
-                    radius: 80,
+                    radius: 50,
                     maxZoom: 16,
                     minZoom: 0
                 });
