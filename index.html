@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Camera Monitor</title>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        #app {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .api-key-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h1 {
+            font-size: 1.5rem;
+            color: #3b82f6;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #94a3b8;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 0.75rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .info-note {
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .info-note a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .info-note a:hover {
+            text-decoration: underline;
+        }
+
+        .stats-panel {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: #1e293b;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+
+        .stats-panel .count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #3b82f6;
+        }
+
+        .stats-panel .label {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            z-index: 10;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #334155;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .camera-popup {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #1e293b;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            max-width: 450px;
+            width: 90%;
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        .popup-header {
+            background: #3b82f6;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .popup-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+            font-size: 1.5rem;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .popup-content {
+            padding: 1rem;
+        }
+
+        .popup-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.75rem;
+        }
+
+        .camera-image {
+            width: 100%;
+            border-radius: 8px;
+            background: #0f172a;
+        }
+
+        .image-placeholder {
+            width: 100%;
+            height: 200px;
+            background: #0f172a;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+        }
+
+        .btn-link {
+            display: block;
+            width: 100%;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: #3b82f6;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-link:hover {
+            background: #2563eb;
+        }
+
+        .maplibregl-popup-content {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .maplibregl-popup-close-button {
+            color: #94a3b8;
+            font-size: 1.5rem;
+        }
+
+        .cluster-marker {
+            background: #3b82f6;
+            border: 3px solid #1e293b;
+            border-radius: 50%;
+            color: white;
+            font-weight: 700;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .cluster-marker:hover {
+            transform: scale(1.1);
+        }
+
+        .camera-marker {
+            width: 32px;
+            height: 32px;
+            background: #3b82f6;
+            border: 3px solid #1e293b;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .error-banner {
+            position: absolute;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #dc2626;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
+    <script>
+        const DRIVE_TEXAS_API_KEY = '829ca858-ef46-430a-a010-e2e60857ef4e';
+        
+        let map;
+        let cameras = [];
+        let selectedCamera = null;
+        let clusterIndex;
+        let markers = [];
+
+        function renderApp() {
+            const app = document.getElementById('app');
+            const mapTilerKey = localStorage.getItem('mapTilerKey');
+
+            if (!mapTilerKey) {
+                app.innerHTML = '<div class="api-key-modal"><div class="modal-content"><div class="modal-header"><span style="font-size: 2rem;">📷</span><h1>Weather Camera Monitor</h1></div><div class="input-group"><label>MapTiler API Key</label><input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key"></div><button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button><div class="info-note">Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a></div></div></div>';
+            } else {
+                app.innerHTML = '<div id="map"></div><div class="stats-panel"><div class="count" id="cameraCount">0</div><div class="label">Cameras Loaded</div></div><div id="loadingIndicator" class="loading-indicator" style="display: none;"><div class="spinner"></div><span>Loading cameras...</span></div><div id="errorBanner" class="error-banner" style="display: none;"></div><div id="cameraPopup" class="camera-popup" style="display: none;"></div>';
+                initMap(mapTilerKey);
+            }
+        }
+
+        function saveApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const key = input.value.trim();
+            if (key) {
+                localStorage.setItem('mapTilerKey', key);
+                renderApp();
+            }
+        }
+
+        function initMap(apiKey) {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=' + apiKey,
+                center: [-95, 37],
+                zoom: 4
+            });
+
+            map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+            map.on('load', function() {
+                loadCameras();
+            });
+
+            map.on('zoom', function() {
+                updateMarkers();
+            });
+
+            map.on('move', function() {
+                updateMarkers();
+            });
+        }
+
+        async function loadCameras() {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.style.display = 'flex';
+
+            try {
+                const allCameras = [];
+
+                const usaResponse = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
+                const usaData = await usaResponse.json();
+                
+                if (usaData.features) {
+                    usaData.features.forEach(function(feature) {
+                        if (feature.geometry && feature.geometry.coordinates) {
+                            const props = feature.properties || {};
+                            allCameras.push({
+                                id: 'usa-' + (props.id || Math.random()),
+                                lat: feature.geometry.coordinates[1],
+                                lng: feature.geometry.coordinates[0],
+                                title: props.title || props.name || 'Traffic Camera',
+                                source: 'USA',
+                                imageUrl: props.image_url || props.url,
+                                webUrl: props.web_page_url
+                            });
+                        }
+                    });
+                }
+
+                try {
+                    const txResponse = await fetch('https://its.txdot.gov/ITS_WEB/FrontEnd/api/cameras?key=' + DRIVE_TEXAS_API_KEY);
+                    const txData = await txResponse.json();
+                    
+                    if (txData && Array.isArray(txData)) {
+                        txData.forEach(function(cam) {
+                            if (cam.Latitude && cam.Longitude) {
+                                allCameras.push({
+                                    id: 'tx-' + (cam.CameraGuid || cam.Id),
+                                    lat: parseFloat(cam.Latitude),
+                                    lng: parseFloat(cam.Longitude),
+                                    title: cam.CameraName || cam.Name || 'TX Camera',
+                                    source: 'Texas',
+                                    imageUrl: cam.ImageUrl || cam.Url,
+                                    webUrl: cam.Url
+                                });
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('Texas cameras error:', err);
+                }
+
+                try {
+                    const msResponse = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
+                    const msData = await msResponse.json();
+                    
+                    if (msData.features) {
+                        msData.features.forEach(function(feature) {
+                            if (feature.geometry && feature.geometry.coordinates) {
+                                const props = feature.properties || {};
+                                allCameras.push({
+                                    id: 'ms-' + (props.id || Math.random()),
+                                    lat: feature.geometry.coordinates[1],
+                                    lng: feature.geometry.coordinates[0],
+                                    title: props.title || 'MS Camera',
+                                    source: 'Mississippi',
+                                    webUrl: props.web_page_url,
+                                    imageUrl: props.image_url
+                                });
+                            }
+                        });
+                    }
+                } catch (err) {
+                    console.error('Mississippi cameras error:', err);
+                }
+
+                cameras = allCameras;
+                document.getElementById('cameraCount').textContent = cameras.length;
+
+                clusterIndex = new Supercluster({
+                    radius: 80,
+                    maxZoom: 16,
+                    minZoom: 0
+                });
+
+                const points = cameras.map(function(cam) {
+                    return {
+                        type: 'Feature',
+                        properties: { camera: cam },
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [cam.lng, cam.lat]
+                        }
+                    };
+                });
+
+                clusterIndex.load(points);
+                updateMarkers();
+
+                loadingIndicator.style.display = 'none';
+            } catch (err) {
+                console.error('Error loading cameras:', err);
+                showError('Error loading camera data');
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        function updateMarkers() {
+            if (!map || !clusterIndex) return;
+
+            markers.forEach(function(marker) {
+                marker.remove();
+            });
+            markers = [];
+
+            const bounds = map.getBounds();
+            const zoom = map.getZoom();
+
+            const clusters = clusterIndex.getClusters(
+                [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+                Math.floor(zoom)
+            );
+
+            clusters.forEach(function(cluster) {
+                const lng = cluster.geometry.coordinates[0];
+                const lat = cluster.geometry.coordinates[1];
+                const isCluster = cluster.properties.cluster;
+
+                if (isCluster) {
+                    const count = cluster.properties.point_count;
+                    const size = count < 100 ? 40 : count < 1000 ? 50 : 60;
+                    
+                    const el = document.createElement('div');
+                    el.className = 'cluster-marker';
+                    el.style.width = size + 'px';
+                    el.style.height = size + 'px';
+                    el.textContent = count;
+
+                    el.addEventListener('click', function() {
+                        const expansionZoom = Math.min(
+                            clusterIndex.getClusterExpansionZoom(cluster.id),
+                            20
+                        );
+                        map.easeTo({
+                            center: [lng, lat],
+                            zoom: expansionZoom
+                        });
+                    });
+
+                    const marker = new maplibregl.Marker({ element: el })
+                        .setLngLat([lng, lat])
+                        .addTo(map);
+
+                    markers.push(marker);
+                } else {
+                    const camera = cluster.properties.camera;
+                    
+                    const el = document.createElement('div');
+                    el.className = 'camera-marker';
+                    el.innerHTML = '&#128247;';
+
+                    el.addEventListener('click', function() {
+                        showCameraPopup(camera);
+                    });
+
+                    const marker = new maplibregl.Marker({ element: el })
+                        .setLngLat([lng, lat])
+                        .addTo(map);
+
+                    markers.push(marker);
+                }
+            });
+        }
+
+        function showCameraPopup(camera) {
+            selectedCamera = camera;
+            const popup = document.getElementById('cameraPopup');
+            
+            let html = '<div class="popup-header"><h3>&#128247; ' + camera.title + '</h3><button class="close-btn" onclick="closeCameraPopup()">×</button></div>';
+            html += '<div class="popup-content">';
+            html += '<div class="popup-meta">Source: ' + camera.source + ' | Lat: ' + camera.lat.toFixed(4) + ', Lng: ' + camera.lng.toFixed(4) + '</div>';
+            
+            if (camera.imageUrl) {
+                html += '<img src="' + camera.imageUrl + '" alt="' + camera.title + '" class="camera-image" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">';
+                html += '<div class="image-placeholder" style="display:none;">Image unavailable</div>';
+            } else {
+                html += '<div class="image-placeholder">No image available</div>';
+            }
+            
+            if (camera.webUrl) {
+                html += '<a href="' + camera.webUrl + '" target="_blank" class="btn-link">View Full Page</a>';
+            }
+            
+            html += '</div>';
+            
+            popup.innerHTML = html;
+            popup.style.display = 'block';
+        }
+
+        function closeCameraPopup() {
+            document.getElementById('cameraPopup').style.display = 'none';
+        }
+
+        function showError(message) {
+            const banner = document.getElementById('errorBanner');
+            banner.textContent = message;
+            banner.style.display = 'block';
+            setTimeout(function() {
+                banner.style.display = 'none';
+            }, 5000);
+        }
+
+        renderApp();
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('apiKeyInput')) {
+                saveApiKey();
+            }
+        });
+    </script>
+</body>
+</html>
