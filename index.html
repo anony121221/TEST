@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Weather Camera Monitor</title>
-    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <title>Traffic Camera Monitor</title>
+    <link href="https://unpkg.com/maplibre-gl@5.13.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@5.13.0/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
         }
 
         body {
@@ -158,6 +165,10 @@
             z-index: 10;
         }
 
+        .loading-indicator.hidden {
+            display: none !important;
+        }
+
         .spinner {
             width: 20px;
             height: 20px;
@@ -182,6 +193,10 @@
             width: 90%;
             z-index: 10;
             overflow: hidden;
+        }
+
+        .camera-popup.hidden {
+            display: none !important;
         }
 
         .popup-header {
@@ -229,6 +244,8 @@
             width: 100%;
             border-radius: 8px;
             background: #0f172a;
+            max-height: 300px;
+            object-fit: cover;
         }
 
         .image-placeholder {
@@ -240,6 +257,10 @@
             align-items: center;
             justify-content: center;
             color: #64748b;
+        }
+
+        .image-placeholder.hidden {
+            display: none !important;
         }
 
         .btn-link {
@@ -260,18 +281,6 @@
             background: #2563eb;
         }
 
-        .maplibregl-popup-content {
-            background: #1e293b;
-            color: #e2e8f0;
-            border-radius: 8px;
-            padding: 0.5rem;
-        }
-
-        .maplibregl-popup-close-button {
-            color: #94a3b8;
-            font-size: 1.5rem;
-        }
-
         .cluster-marker {
             background: #3b82f6;
             border: 3px solid #1e293b;
@@ -284,6 +293,7 @@
             justify-content: center;
             cursor: pointer;
             transition: transform 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
 
         .cluster-marker:hover {
@@ -321,13 +331,15 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             z-index: 10;
         }
+
+        .error-banner.hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
     <div id="app"></div>
 
-    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-    <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
     <script>
         let map;
         let cameras = [];
@@ -335,21 +347,157 @@
         let clusterIndex;
         let markers = [];
 
+        async function loadAllCameras() {
+            const allCameras = [];
+
+            await Promise.all([
+                loadAlabamaCameras(allCameras),
+                loadMississippiCameras(allCameras),
+                loadLouisianaCameras(allCameras),
+            ]);
+
+            return allCameras;
+        }
+
+        async function loadAlabamaCameras(allCameras) {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
+                const data = await response.json();
+
+                if (data && typeof data === 'object') {
+                    Object.entries(data).forEach(([county, cities]) => {
+                        if (cities && typeof cities === 'object') {
+                            Object.entries(cities).forEach(([city, cams]) => {
+                                if (Array.isArray(cams)) {
+                                    cams.forEach((cam, index) => {
+                                        if (cam.latitude && cam.longitude) {
+                                            allCameras.push({
+                                                id: `alabama-${county}-${city}-${index}`,
+                                                lat: cam.latitude,
+                                                lng: cam.longitude,
+                                                title: cam.description || `${city} Camera`,
+                                                source: 'Alabama',
+                                                direction: cam.direction,
+                                                encoding: cam.encoding,
+                                                format: cam.format,
+                                                imageUrl: cam.format === 'IMAGE_STREAM' ? cam.url : undefined,
+                                                webUrl: cam.url,
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Alabama cameras error:', err);
+            }
+        }
+
+        async function loadMississippiCameras(allCameras) {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
+                const data = await response.json();
+
+                if (data && data.features && Array.isArray(data.features)) {
+                    data.features.forEach((feature) => {
+                        if (feature.geometry && feature.geometry.coordinates) {
+                            const props = feature.properties || {};
+                            allCameras.push({
+                                id: `ms-${props.id || Math.random()}`,
+                                lat: feature.geometry.coordinates[1],
+                                lng: feature.geometry.coordinates[0],
+                                title: props.title || 'Mississippi Camera',
+                                source: 'Mississippi',
+                                webUrl: props.web_page_url,
+                                imageUrl: props.image_url,
+                            });
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Mississippi cameras error:', err);
+            }
+        }
+
+        async function loadLouisianaCameras(allCameras) {
+            try {
+                const response = await fetch('https://www.511la.org/map/mapIcons/Cameras');
+                const data = await response.json();
+
+                if (data && data.item2 && Array.isArray(data.item2)) {
+                    data.item2.forEach((marker) => {
+                        if (marker.location && Array.isArray(marker.location) && marker.location.length === 2) {
+                            const itemId = marker.itemId;
+                            allCameras.push({
+                                id: `la-${itemId}`,
+                                lat: marker.location[0],
+                                lng: marker.location[1],
+                                title: marker.title || `Louisiana Camera ${itemId}`,
+                                source: '511LA',
+                                webUrl: `https://www.511la.org/map/Cctv/${itemId}?t=${Date.now()}`,
+                            });
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Louisiana cameras error:', err);
+            }
+        }
+
         function renderApp() {
-            var app = document.getElementById('app');
-            var mapTilerKey = localStorage.getItem('mapTilerKey');
+            const app = document.getElementById('app');
+            const mapTilerKey = localStorage.getItem('mapTilerKey');
 
             if (!mapTilerKey) {
-                app.innerHTML = '<div class="api-key-modal"><div class="modal-content"><div class="modal-header"><span style="font-size: 2rem;">&#128247;</span><h1>Weather Camera Monitor</h1></div><div class="input-group"><label>MapTiler API Key</label><input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key"></div><button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button><div class="info-note">Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a></div></div></div>';
+                app.innerHTML = `
+                    <div class="api-key-modal">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <span style="font-size: 2rem;">📷</span>
+                                <h1>Traffic Camera Monitor</h1>
+                            </div>
+                            <div class="input-group">
+                                <label>MapTiler API Key</label>
+                                <input type="text" id="apiKeyInput" placeholder="Enter your MapTiler API key">
+                            </div>
+                            <button class="btn-primary" onclick="saveApiKey()">Launch Monitor</button>
+                            <div class="info-note">
+                                Get your free API key at <a href="https://www.maptiler.com/" target="_blank">maptiler.com</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('apiKeyInput').focus();
+                document.addEventListener('keypress', handleApiKeyEnter);
             } else {
-                app.innerHTML = '<div id="map"></div><div class="stats-panel"><div class="count" id="cameraCount">0</div><div class="label">Cameras Loaded</div></div><div id="loadingIndicator" class="loading-indicator" style="display: none;"><div class="spinner"></div><span>Loading cameras...</span></div><div id="errorBanner" class="error-banner" style="display: none;"></div><div id="cameraPopup" class="camera-popup" style="display: none;"></div>';
+                app.innerHTML = `
+                    <div id="map"></div>
+                    <div class="stats-panel">
+                        <div class="count" id="cameraCount">0</div>
+                        <div class="label">Cameras Loaded</div>
+                    </div>
+                    <div id="loadingIndicator" class="loading-indicator">
+                        <div class="spinner"></div>
+                        <span>Loading cameras...</span>
+                    </div>
+                    <div id="errorBanner" class="error-banner hidden"></div>
+                    <div id="cameraPopup" class="camera-popup hidden"></div>
+                `;
                 initMap(mapTilerKey);
             }
         }
 
+        function handleApiKeyEnter(e) {
+            if (e.key === 'Enter' && document.getElementById('apiKeyInput')) {
+                saveApiKey();
+            }
+        }
+
         function saveApiKey() {
-            var input = document.getElementById('apiKeyInput');
-            var key = input.value.trim();
+            const input = document.getElementById('apiKeyInput');
+            const key = input.value.trim();
             if (key) {
                 localStorage.setItem('mapTilerKey', key);
                 renderApp();
@@ -360,81 +508,23 @@
             map = new maplibregl.Map({
                 container: 'map',
                 style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=' + apiKey,
-                center: [-95, 37],
-                zoom: 4
+                center: [-92, 32],
+                zoom: 6
             });
 
             map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-            map.on('load', function() {
-                loadCameras();
-            });
-
-            map.on('zoom', function() {
-                updateMarkers();
-            });
-
-            map.on('move', function() {
-                updateMarkers();
-            });
+            map.on('load', loadCameras);
+            map.on('zoom', updateMarkers);
+            map.on('move', updateMarkers);
         }
 
         async function loadCameras() {
-            var loadingIndicator = document.getElementById('loadingIndicator');
-            loadingIndicator.style.display = 'flex';
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.classList.remove('hidden');
 
             try {
-                var allCameras = [];
-
-                try {
-                    var usaResponse = await fetch('https://raw.githubusercontent.com/AidanWelch/OpenTrafficCamMap/refs/heads/master/cameras/USA.json');
-                    var usaData = await usaResponse.json();
-                    
-                    if (usaData && usaData.features) {
-                        usaData.features.forEach(function(feature) {
-                            if (feature.geometry && feature.geometry.coordinates) {
-                                var props = feature.properties || {};
-                                allCameras.push({
-                                    id: 'usa-' + (props.id || Math.random()),
-                                    lat: feature.geometry.coordinates[1],
-                                    lng: feature.geometry.coordinates[0],
-                                    title: props.title || props.name || 'Traffic Camera',
-                                    source: 'USA',
-                                    imageUrl: props.image_url || props.url,
-                                    webUrl: props.web_page_url
-                                });
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.error('USA cameras error:', err);
-                }
-
-                try {
-                    var msResponse = await fetch('https://raw.githubusercontent.com/anony121221/maps-data/refs/heads/main/mdot_traffic_cameras.geojson');
-                    var msData = await msResponse.json();
-                    
-                    if (msData && msData.features) {
-                        msData.features.forEach(function(feature) {
-                            if (feature.geometry && feature.geometry.coordinates) {
-                                var props = feature.properties || {};
-                                allCameras.push({
-                                    id: 'ms-' + (props.id || Math.random()),
-                                    lat: feature.geometry.coordinates[1],
-                                    lng: feature.geometry.coordinates[0],
-                                    title: props.title || 'MS Camera',
-                                    source: 'Mississippi',
-                                    webUrl: props.web_page_url,
-                                    imageUrl: props.image_url
-                                });
-                            }
-                        });
-                    }
-                } catch (err) {
-                    console.error('Mississippi cameras error:', err);
-                }
-
-                cameras = allCameras;
+                cameras = await loadAllCameras();
                 document.getElementById('cameraCount').textContent = cameras.length;
 
                 clusterIndex = new Supercluster({
@@ -443,91 +533,80 @@
                     minZoom: 0
                 });
 
-                var points = cameras.map(function(cam) {
-                    return {
-                        type: 'Feature',
-                        properties: { camera: cam },
-                        geometry: {
-                            type: 'Point',
-                            coordinates: [cam.lng, cam.lat]
-                        }
-                    };
-                });
+                const points = cameras.map((cam) => ({
+                    type: 'Feature',
+                    properties: { camera: cam },
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [cam.lng, cam.lat]
+                    }
+                }));
 
                 clusterIndex.load(points);
                 updateMarkers();
 
-                loadingIndicator.style.display = 'none';
+                loadingIndicator.classList.add('hidden');
             } catch (err) {
                 console.error('Error loading cameras:', err);
                 showError('Error loading camera data');
-                loadingIndicator.style.display = 'none';
+                loadingIndicator.classList.add('hidden');
             }
         }
 
         function updateMarkers() {
             if (!map || !clusterIndex) return;
 
-            markers.forEach(function(marker) {
-                marker.remove();
-            });
+            markers.forEach((marker) => marker.remove());
             markers = [];
 
-            var bounds = map.getBounds();
-            var zoom = map.getZoom();
+            const bounds = map.getBounds();
+            const zoom = Math.floor(map.getZoom());
 
-            var clusters = clusterIndex.getClusters(
+            const clusters = clusterIndex.getClusters(
                 [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
-                Math.floor(zoom)
+                zoom
             );
 
-            clusters.forEach(function(cluster) {
-                var lng = cluster.geometry.coordinates[0];
-                var lat = cluster.geometry.coordinates[1];
-                var isCluster = cluster.properties.cluster;
+            clusters.forEach((cluster) => {
+                const [lng, lat] = cluster.geometry.coordinates;
+                const isCluster = cluster.properties.cluster;
 
                 if (isCluster) {
-                    var count = cluster.properties.point_count;
-                    var size = count < 100 ? 40 : count < 1000 ? 50 : 60;
-                    
-                    var el = document.createElement('div');
+                    const count = cluster.properties.point_count;
+                    const size = count < 100 ? 40 : count < 1000 ? 50 : 60;
+
+                    const el = document.createElement('div');
                     el.className = 'cluster-marker';
                     el.style.width = size + 'px';
                     el.style.height = size + 'px';
                     el.textContent = count;
 
-                    el.addEventListener('click', (function(clusterId, lng, lat) {
-                        return function() {
-                            var expansionZoom = Math.min(
-                                clusterIndex.getClusterExpansionZoom(clusterId),
-                                20
-                            );
-                            map.easeTo({
-                                center: [lng, lat],
-                                zoom: expansionZoom
-                            });
-                        };
-                    })(cluster.id, lng, lat));
+                    el.addEventListener('click', () => {
+                        const expansionZoom = Math.min(
+                            clusterIndex.getClusterExpansionZoom(cluster.id),
+                            20
+                        );
+                        map.easeTo({
+                            center: [lng, lat],
+                            zoom: expansionZoom
+                        });
+                    });
 
-                    var marker = new maplibregl.Marker({ element: el })
+                    const marker = new maplibregl.Marker({ element: el })
                         .setLngLat([lng, lat])
                         .addTo(map);
 
                     markers.push(marker);
                 } else {
-                    var camera = cluster.properties.camera;
-                    
-                    var el = document.createElement('div');
+                    const camera = cluster.properties.camera;
+
+                    const el = document.createElement('div');
                     el.className = 'camera-marker';
-                    el.innerHTML = '&#128247;';
+                    el.innerHTML = '📷';
 
-                    el.addEventListener('click', (function(cam) {
-                        return function() {
-                            showCameraPopup(cam);
-                        };
-                    })(camera));
+                    el.addEventListener('click', () => showCameraPopup(camera));
 
-                    var marker = new maplibregl.Marker({ element: el })
+                    const marker = new maplibregl.Marker({ element: el })
                         .setLngLat([lng, lat])
                         .addTo(map);
 
@@ -538,49 +617,53 @@
 
         function showCameraPopup(camera) {
             selectedCamera = camera;
-            var popup = document.getElementById('cameraPopup');
-            
-            var html = '<div class="popup-header"><h3>&#128247; ' + camera.title + '</h3><button class="close-btn" onclick="closeCameraPopup()">×</button></div>';
-            html += '<div class="popup-content">';
-            html += '<div class="popup-meta">Source: ' + camera.source + ' | Lat: ' + camera.lat.toFixed(4) + ', Lng: ' + camera.lng.toFixed(4) + '</div>';
-            
+            const popup = document.getElementById('cameraPopup');
+
+            let html = `
+                <div class="popup-header">
+                    <h3>📷 ${camera.title}</h3>
+                    <button class="close-btn" onclick="closeCameraPopup()">×</button>
+                </div>
+                <div class="popup-content">
+                    <div class="popup-meta">
+                        Source: ${camera.source} | Lat: ${camera.lat.toFixed(4)}, Lng: ${camera.lng.toFixed(4)}
+                        ${camera.direction ? ` | Direction: ${camera.direction}` : ''}
+                    </div>
+            `;
+
             if (camera.imageUrl) {
-                html += '<img src="' + camera.imageUrl + '" alt="' + camera.title + '" class="camera-image" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">';
-                html += '<div class="image-placeholder" style="display:none;">Image unavailable</div>';
+                html += `
+                    <img src="${camera.imageUrl}" alt="${camera.title}" class="camera-image" onerror="this.style.display='none'; document.querySelector('.image-placeholder').classList.remove('hidden');">
+                    <div class="image-placeholder hidden">Image unavailable</div>
+                `;
             } else {
-                html += '<div class="image-placeholder">No image available</div>';
+                html += `<div class="image-placeholder">No image available</div>`;
             }
-            
+
             if (camera.webUrl) {
-                html += '<a href="' + camera.webUrl + '" target="_blank" class="btn-link">View Full Page</a>';
+                html += `<a href="${camera.webUrl}" target="_blank" class="btn-link">View Full Page</a>`;
             }
-            
+
             html += '</div>';
-            
+
             popup.innerHTML = html;
-            popup.style.display = 'block';
+            popup.classList.remove('hidden');
         }
 
         function closeCameraPopup() {
-            document.getElementById('cameraPopup').style.display = 'none';
+            document.getElementById('cameraPopup').classList.add('hidden');
         }
 
         function showError(message) {
-            var banner = document.getElementById('errorBanner');
+            const banner = document.getElementById('errorBanner');
             banner.textContent = message;
-            banner.style.display = 'block';
-            setTimeout(function() {
-                banner.style.display = 'none';
+            banner.classList.remove('hidden');
+            setTimeout(() => {
+                banner.classList.add('hidden');
             }, 5000);
         }
 
         renderApp();
-
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && document.getElementById('apiKeyInput')) {
-                saveApiKey();
-            }
-        });
     </script>
 </body>
 </html>
