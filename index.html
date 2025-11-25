@@ -346,6 +346,8 @@
         let selectedCamera = null;
         let clusterIndex;
         let markers = [];
+        const DRIVETEXAS_API_KEY = '829ca858-ef46-430a-a010-e2e60857ef4e';
+        const CORS_PROXY = 'https://corsproxy.io/?';
 
         async function loadAllCameras() {
             const allCameras = [];
@@ -354,6 +356,7 @@
                 loadAlabamaCameras(allCameras),
                 loadMississippiCameras(allCameras),
                 loadLouisianaCameras(allCameras),
+                loadTexasCameras(allCameras),
             ]);
 
             return allCameras;
@@ -423,7 +426,7 @@
 
         async function loadLouisianaCameras(allCameras) {
             try {
-                const response = await fetch('https://www.511la.org/map/mapIcons/Cameras');
+                const response = await fetch(CORS_PROXY + encodeURIComponent('https://www.511la.org/map/mapIcons/Cameras'));
                 const data = await response.json();
 
                 if (data && data.item2 && Array.isArray(data.item2)) {
@@ -436,13 +439,39 @@
                                 lng: marker.location[1],
                                 title: marker.title || `Louisiana Camera ${itemId}`,
                                 source: '511LA',
-                                webUrl: `https://www.511la.org/map/Cctv/${itemId}?t=${Date.now()}`,
+                                imageUrl: `https://www.511la.org/map/Cctv/${itemId}?t=${Date.now()}`,
+                                webUrl: `https://www.511la.org/map/Cctv/${itemId}`,
                             });
                         }
                     });
                 }
             } catch (err) {
                 console.error('Louisiana cameras error:', err);
+            }
+        }
+
+        async function loadTexasCameras(allCameras) {
+            try {
+                const response = await fetch(`https://its.txdot.gov/ITS_WEB/FrontEnd/api/cctv?key=${DRIVETEXAS_API_KEY}`);
+                const data = await response.json();
+
+                if (data && Array.isArray(data)) {
+                    data.forEach((cam) => {
+                        if (cam.latitude && cam.longitude && cam.imageUrl) {
+                            allCameras.push({
+                                id: `tx-${cam.camId}`,
+                                lat: cam.latitude,
+                                lng: cam.longitude,
+                                title: cam.cameraName || cam.location || 'Texas Camera',
+                                source: 'DriveTexas',
+                                imageUrl: cam.imageUrl,
+                                webUrl: cam.imageUrl,
+                            });
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Texas cameras error:', err);
             }
         }
 
@@ -508,7 +537,7 @@
             map = new maplibregl.Map({
                 container: 'map',
                 style: 'https://api.maptiler.com/maps/streets-v2-dark/style.json?key=' + apiKey,
-                center: [-92, 32],
+                center: [-95, 31],
                 zoom: 6
             });
 
@@ -633,7 +662,7 @@
 
             if (camera.imageUrl) {
                 html += `
-                    <img src="${camera.imageUrl}" alt="${camera.title}" class="camera-image" onerror="this.style.display='none'; document.querySelector('.image-placeholder').classList.remove('hidden');">
+                    <img src="${camera.imageUrl}" alt="${camera.title}" class="camera-image" onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
                     <div class="image-placeholder hidden">Image unavailable</div>
                 `;
             } else {
