@@ -280,6 +280,8 @@
                 
                 let count = 0;
                 let withStreams = 0;
+                let withSnapshots = 0;
+                
                 if (data && Array.isArray(data)) {
                     data.forEach((pole) => {
                         if (pole.mapCameras && Array.isArray(pole.mapCameras)) {
@@ -289,7 +291,14 @@
                                 
                                 if (!isNaN(lat) && !isNaN(lng)) {
                                     const streamUrl = cam.streamDictionary?.streamSrc;
+                                    const streamKey = cam.streamDictionary?.streamKey;
+                                    
+                                    // Oklahoma has snapshot images available!
+                                    const snapshotUrl = streamKey ? 
+                                        `https://oktraffic.org/snapshots/${streamKey}.jpg` : null;
+                                    
                                     if (streamUrl) withStreams++;
+                                    if (snapshotUrl) withSnapshots++;
                                     
                                     allCameras.push({
                                         id: `ok-${cam.id}`,
@@ -299,9 +308,8 @@
                                         source: 'Oklahoma DOT',
                                         direction: cam.direction,
                                         streamUrl: streamUrl,
-                                        imageUrl: undefined,
+                                        imageUrl: snapshotUrl, // Use snapshot instead of stream
                                         webUrl: streamUrl ? `https://oktraffic.org` : undefined,
-                                        note: streamUrl ? 'HLS video stream (requires video player)' : 'No stream available'
                                     });
                                     count++;
                                 }
@@ -309,10 +317,11 @@
                         }
                     });
                 }
-                addLog(`Oklahoma: Loaded ${count} cameras (${withStreams} with video streams)`, 'success');
-                addLog('⚠️ Oklahoma cameras use HLS video (.m3u8), not static images', 'warn');
+                addLog(`Oklahoma: Loaded ${count} cameras (${withSnapshots} with snapshots, ${withStreams} with streams)`, 'success');
+                console.log(`🔍 OK snapshots available: ${withSnapshots}/${count}`);
             } catch (err) {
                 addLog(`Oklahoma error: ${err.message}`, 'error');
+                console.error('Full Oklahoma error:', err);
             }
         }
 
@@ -520,23 +529,36 @@
                 const imgUrl = camera.imageUrl.includes('?') ? 
                     `${camera.imageUrl}&_=${cacheBuster}` : 
                     `${camera.imageUrl}?_=${cacheBuster}`;
+                
+                // Try CORS proxy for known problematic domains
+                const needsProxy = camera.imageUrl.includes('houstontranstar.org') || 
+                                   camera.imageUrl.includes('traffic.houstontranstar.org');
+                const finalUrl = needsProxy ? CORS_PROXY + encodeURIComponent(camera.imageUrl) : imgUrl;
+                
+                console.log(`Attempting to load: ${needsProxy ? 'CORS PROXY + ' : ''}${camera.imageUrl}`);
                     
                 html += `
-                    <img src="${imgUrl}" alt="${camera.title}" class="camera-image" 
-                         onerror="console.error('Failed to load image:', '${camera.imageUrl}'); this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                        <button onclick="refreshCameraImage('${camera.id}')" 
+                                style="padding: 0.5rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; flex: 1;">
+                            🔄 Refresh Image
+                        </button>
+                    </div>
+                    <img id="camera-img-${camera.id}" src="${finalUrl}" alt="${camera.title}" class="camera-image" 
+                         onerror="console.error('❌ Failed to load image:', '${camera.imageUrl}'); this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
                          onload="console.log('✅ Image loaded successfully')">
                     <div class="image-placeholder hidden">
                         <div>❌ Image failed to load</div>
                         <div style="font-size: 0.7rem;">Camera may be offline, blocked by CORS, or URL is invalid</div>
-                        <div style="font-size: 0.6rem; margin-top: 0.5rem; word-break: break-all;">${camera.imageUrl}</div>
+                        ${needsProxy ? '<div style="font-size: 0.6rem; color: #f59e0b; margin-top: 0.5rem;">Tried using CORS proxy - still failed</div>' : ''}
                     </div>
                 `;
             } else if (camera.streamUrl) {
                 html += `
                     <div class="image-placeholder">
-                        <div>🎥 HLS Video Stream</div>
-                        <div style="font-size: 0.8rem; margin-top: 0.5rem;">This camera uses video streaming (.m3u8)</div>
-                        <div style="font-size: 0.7rem; color: #64748b;">Requires video player to view</div>
+                        <div>🎥 HLS Video Stream Only</div>
+                        <div style="font-size: 0.8rem; margin-top: 0.5rem;">This camera only has live video streaming (.m3u8)</div>
+                        <div style="font-size: 0.7rem; color: #64748b;">No snapshot image available</div>
                     </div>
                 `;
             } else {
@@ -560,6 +582,20 @@
 
         function closeCameraPopup() {
             document.getElementById('cameraPopup').classList.add('hidden');
+        }
+
+        function refreshCameraImage(cameraId) {
+            const camera = cameras.find(c => c.id === cameraId);
+            if (!camera || !camera.imageUrl) return;
+            
+            const img = document.getElementById(`camera-img-${cameraId}`);
+            if (img) {
+                console.log('🔄 Refreshing image for:', camera.title);
+                const needsProxy = camera.imageUrl.includes('houstontranstar.org') || 
+                                   camera.imageUrl.includes('traffic.houstontranstar.org');
+                const baseUrl = needsProxy ? CORS_PROXY + encodeURIComponent(camera.imageUrl) : camera.imageUrl;
+                img.src = baseUrl + (baseUrl.includes('?') ? '&' : '?') + '_=' + Date.now();
+            }
         }
 
         function showError(message) {
