@@ -341,6 +341,9 @@
     <div id="app"></div>
 
     <script>
+        // CORS PROXY - ADD THIS AT THE TOP
+        const CORS_PROXY = 'https://corsproxy.io/?';
+
         let map;
         let cameras = [];
         let selectedCamera = null;
@@ -462,13 +465,15 @@
                             const lat = parseFloat(feature.geometry.coordinates[1]);
                             const lng = parseFloat(feature.geometry.coordinates[0]);
                             if (!isNaN(lat) && !isNaN(lng)) {
+                                // Add timestamp to image URL to prevent caching
+                                const imageUrl = props.image_url ? `${props.image_url}?t=${Date.now()}` : undefined;
                                 allCameras.push({
                                     id: `tx-${props.id || Math.random()}`,
                                     lat: lat,
                                     lng: lng,
                                     title: props.name || props.title || 'Texas Camera',
                                     source: 'Texas DOT',
-                                    imageUrl: props.image_url,
+                                    imageUrl: imageUrl,
                                     webUrl: props.web_url,
                                 });
                             }
