@@ -52,11 +52,7 @@
         .camera-marker:hover { transform: scale(1.2); }
         .error-banner { position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); background: #dc2626; color: white; padding: 0.75rem 1.5rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 10; max-width: 80%; }
         .error-banner.hidden { display: none !important; }
-        .log-panel { position: absolute; bottom: 1rem; right: 1rem; background: #1e293b; padding: 1rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); z-index: 10; max-width: 400px; max-height: 200px; overflow-y: auto; font-size: 0.75rem; font-family: monospace; }
-        .log-entry { margin-bottom: 0.25rem; color: #94a3b8; }
-        .log-entry.error { color: #ef4444; }
-        .log-entry.success { color: #10b981; }
-        .log-entry.warn { color: #f59e0b; }
+
     </style>
 </head>
 <body>
@@ -74,14 +70,21 @@
 
         function addLog(message, type = 'info') {
             const timestamp = new Date().toLocaleTimeString();
-            logs.push({ message: `[${timestamp}] ${message}`, type });
-            console.log(`${type.toUpperCase()}: ${message}`);
+            const logMessage = `[${timestamp}] ${message}`;
             
-            const logPanel = document.getElementById('logPanel');
-            if (logPanel) {
-                logPanel.innerHTML = logs.slice(-20).reverse().map(log => 
-                    `<div class="log-entry ${log.type}">${log.message}</div>`
-                ).join('');
+            // Log to console with appropriate method
+            switch(type) {
+                case 'error':
+                    console.error(logMessage);
+                    break;
+                case 'warn':
+                    console.warn(logMessage);
+                    break;
+                case 'success':
+                    console.log(`✅ ${logMessage}`);
+                    break;
+                default:
+                    console.log(logMessage);
             }
         }
 
@@ -209,36 +212,63 @@
                 
                 let count = 0;
                 let withImages = 0;
+                let emptyUrls = 0;
+                let sampleUrls = [];
+                
                 if (data && data.features && Array.isArray(data.features)) {
-                    data.features.forEach((feature) => {
+                    data.features.forEach((feature, idx) => {
                         if (feature.geometry && feature.geometry.coordinates && feature.properties) {
                             const props = feature.properties;
                             const lat = parseFloat(feature.geometry.coordinates[1]);
                             const lng = parseFloat(feature.geometry.coordinates[0]);
                             
                             if (!isNaN(lat) && !isNaN(lng)) {
-                                const hasImage = props.url && props.url.trim() !== '';
-                                if (hasImage) withImages++;
+                                // Check for valid image URL
+                                const hasValidUrl = props.url && props.url.trim() !== '' && 
+                                                   props.url !== 'null' && props.url !== 'undefined';
+                                
+                                if (hasValidUrl) {
+                                    withImages++;
+                                    if (sampleUrls.length < 5) {
+                                        sampleUrls.push(props.url);
+                                    }
+                                } else {
+                                    emptyUrls++;
+                                }
                                 
                                 allCameras.push({
-                                    id: `tx-${props.OBJECTID || Math.random()}`,
+                                    id: `tx-${props.OBJECTID || count}`,
                                     lat: lat,
                                     lng: lng,
-                                    title: props.Equipment_Name || 'Texas Camera',
+                                    title: props.Equipment_Name || props.Equipment_Name || 'Texas Camera',
                                     source: 'Texas DOT',
                                     roadway: props.roadway,
                                     direction: props.Direction,
-                                    imageUrl: hasImage ? props.url : undefined,
-                                    webUrl: hasImage ? props.url : undefined,
+                                    district: props.District_Name,
+                                    imageUrl: hasValidUrl ? props.url : undefined,
+                                    webUrl: hasValidUrl ? props.url : 'https://its.txdot.gov/',
                                 });
                                 count++;
                             }
                         }
                     });
                 }
-                addLog(`Texas: Loaded ${count} cameras (${withImages} with images)`, withImages < count / 2 ? 'warn' : 'success');
+                
+                console.log('🔍 TX Camera URL Analysis:');
+                console.log(`   Total cameras: ${count}`);
+                console.log(`   With images: ${withImages} (${(withImages/count*100).toFixed(1)}%)`);
+                console.log(`   Empty URLs: ${emptyUrls} (${(emptyUrls/count*100).toFixed(1)}%)`);
+                console.log('   Sample working URLs:', sampleUrls);
+                
+                addLog(`Texas: Loaded ${count} cameras (${withImages} with images, ${emptyUrls} without)`, 
+                       withImages > count / 2 ? 'success' : 'warn');
+                
+                if (withImages < count / 2) {
+                    addLog('⚠️ Most Texas cameras have no image URLs in the data', 'warn');
+                }
             } catch (err) {
                 addLog(`Texas error: ${err.message}`, 'error');
+                console.error('Full Texas error:', err);
             }
         }
 
@@ -324,7 +354,6 @@
                     </div>
                     <div id="errorBanner" class="error-banner hidden"></div>
                     <div id="cameraPopup" class="camera-popup hidden"></div>
-                    <div id="logPanel" class="log-panel"></div>
                 `;
                 initMap(mapTilerKey);
             }
@@ -460,7 +489,14 @@
             selectedCamera = camera;
             const popup = document.getElementById('cameraPopup');
 
-            addLog(`Opening camera: ${camera.title}`, 'info');
+            console.log('📷 Opening camera:', {
+                title: camera.title,
+                source: camera.source,
+                hasImage: !!camera.imageUrl,
+                hasStream: !!camera.streamUrl,
+                imageUrl: camera.imageUrl,
+                streamUrl: camera.streamUrl
+            });
 
             const lat = typeof camera.lat === 'number' ? camera.lat.toFixed(4) : parseFloat(camera.lat).toFixed(4);
             const lng = typeof camera.lng === 'number' ? camera.lng.toFixed(4) : parseFloat(camera.lng).toFixed(4);
@@ -475,31 +511,39 @@
                         <strong>Source:</strong> ${camera.source} | <strong>Lat:</strong> ${lat}, <strong>Lng:</strong> ${lng}
                         ${camera.direction ? ` | <strong>Direction:</strong> ${camera.direction}` : ''}
                         ${camera.roadway ? ` | <strong>Road:</strong> ${camera.roadway}` : ''}
+                        ${camera.district ? `<br><strong>District:</strong> ${camera.district}` : ''}
                     </div>
             `;
 
             if (camera.imageUrl) {
+                const cacheBuster = Date.now();
+                const imgUrl = camera.imageUrl.includes('?') ? 
+                    `${camera.imageUrl}&_=${cacheBuster}` : 
+                    `${camera.imageUrl}?_=${cacheBuster}`;
+                    
                 html += `
-                    <img src="${camera.imageUrl}" alt="${camera.title}" class="camera-image" 
-                         onerror="this.style.display='none'; this.nextElementSibling.classList.remove('hidden');">
+                    <img src="${imgUrl}" alt="${camera.title}" class="camera-image" 
+                         onerror="console.error('Failed to load image:', '${camera.imageUrl}'); this.style.display='none'; this.nextElementSibling.classList.remove('hidden');"
+                         onload="console.log('✅ Image loaded successfully')">
                     <div class="image-placeholder hidden">
                         <div>❌ Image failed to load</div>
-                        <div style="font-size: 0.7rem;">Camera may be offline or require direct access</div>
+                        <div style="font-size: 0.7rem;">Camera may be offline, blocked by CORS, or URL is invalid</div>
+                        <div style="font-size: 0.6rem; margin-top: 0.5rem; word-break: break-all;">${camera.imageUrl}</div>
                     </div>
                 `;
             } else if (camera.streamUrl) {
                 html += `
                     <div class="image-placeholder">
-                        <div>🎥 Video Stream Available</div>
-                        <div style="font-size: 0.8rem; margin-top: 0.5rem;">HLS video stream (.m3u8)</div>
+                        <div>🎥 HLS Video Stream</div>
+                        <div style="font-size: 0.8rem; margin-top: 0.5rem;">This camera uses video streaming (.m3u8)</div>
                         <div style="font-size: 0.7rem; color: #64748b;">Requires video player to view</div>
                     </div>
                 `;
             } else {
                 html += `
                     <div class="image-placeholder">
-                        <div>📷 No Image Available</div>
-                        <div style="font-size: 0.7rem;">${camera.note || 'Camera data exists but no image URL'}</div>
+                        <div>📷 No Media Available</div>
+                        <div style="font-size: 0.7rem; margin-top: 0.5rem;">This camera location exists but has no image or stream URL in the data</div>
                     </div>
                 `;
             }
