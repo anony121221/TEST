@@ -7,12 +7,12 @@
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-o9N1j7kPyk+8Gk5tC4s3tR9fJkP0Q0Lw3vCqkQ+3ZiU="
+
     crossorigin=""
   />
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1j7kPyk+8Gk5tC4s3tR9fJkP0Q0Lw3vCqkQ+3ZiU="
+
     crossorigin=""
   ></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.12/dist/hls.min.js"></script>
@@ -221,6 +221,7 @@
       return date.toLocaleString("en-US", { timeZone: "America/Chicago" });
     }
 
+
     function showSnapshot(url) {
       destroyHls();
       videoEl.pause();
@@ -228,8 +229,7 @@
       videoEl.style.display = "none";
       snapshotImg.style.display = "block";
 
-      const target = `${CORS_PROXY}${encodeURIComponent(url)}&t=${Date.now()}`;
-      snapshotImg.src = target;
+
       setStatus("Showing sensor snapshot (refreshes every 15 seconds).");
     }
 
@@ -279,7 +279,7 @@
       const resolution = props.resolution || "—";
       const updated = toCst(props.last_updated || props.last_update);
       const pictureTime = toCst(props.picture_timestamp || props.picture_time);
-      const thumbnail = `${CORS_PROXY}${encodeURIComponent(`http://oktrafficradar.org/hrserver/${id}/latest.jpg`)}&t=${Date.now()}`;
+
 
       return `
         <div>
